@@ -65,27 +65,7 @@
         </div>
     </div>
 
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js"></script>
-
     <script>
-        // Firebaseの設定 (自分のプロジェクト設定をここに入れてください)
-        const firebaseConfig = {
-            apiKey: "AIzaSyCAAkGquHZrbnVsw1ckVLzHU5o43jePDfw",
-            authDomain: "tiktoklite-money.firebaseapp.com",
-            databaseURL: "https://tiktoklite-money-default-rtdb.firebaseio.com",
-            projectId: "tiktoklite-money",
-            storageBucket: "tiktoklite-money.appspot.com",
-            messagingSenderId: "967253426499",
-            appId: "1:967253426499:web:8c2f12f81580c2048e2ff6",
-            measurementId: "G-8KGST3NYYQ"
-        };
-
-        // Firebaseの初期化
-        const app = firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-
         const form = document.getElementById('revenueForm');
         const tableBody = document.querySelector('#revenueTable tbody');
         const totalNishinoEl = document.getElementById('totalNishino');
@@ -95,26 +75,25 @@
         const monthlyTotalEl = document.getElementById('monthlyTotal');
         const grandTotalEl = document.getElementById('grandTotal');
 
+        let revenues = JSON.parse(localStorage.getItem('revenues')) || [];
         let totalNishino = 0;
         let totalKaito = 0;
         let grandTotal = 0;
 
-        // Firestoreにデータを保存する関数
-        function saveRevenueToFirestore(amount, recipient, isDistributed) {
-            db.collection("revenues").add({
+        // ローカルストレージにデータを保存する関数
+        function saveRevenueToLocal(amount, recipient, isDistributed) {
+            const revenue = {
                 amount: parseInt(amount),
                 recipient: recipient,
                 isDistributed: isDistributed,
                 timestamp: new Date() // 日時を記録
-            }).then((docRef) => {
-                console.log("Document written with ID: ", docRef.id);
-                loadRevenues(); // 新しいデータを反映
-            }).catch((error) => {
-                console.error("Error adding document: ", error);
-            });
+            };
+            revenues.push(revenue);
+            localStorage.setItem('revenues', JSON.stringify(revenues));
+            loadRevenues(); // 新しいデータを反映
         }
 
-        // Firestoreからデータを読み込む関数
+        // ローカルストレージからデータを読み込む関数
         function loadRevenues() {
             tableBody.innerHTML = ''; // テーブルをクリア
             totalNishino = 0;
@@ -127,64 +106,59 @@
             let weeklyTotal = 0;
             let monthlyTotal = 0;
 
-            db.collection("revenues").get().then((querySnapshot) => {
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    const newRow = tableBody.insertRow();
-                    const cell1 = newRow.insertCell(0);
-                    const cell2 = newRow.insertCell(1);
-                    const cell3 = newRow.insertCell(2);
-                    const cell4 = newRow.insertCell(3);
+            revenues.forEach((data, index) => {
+                const newRow = tableBody.insertRow();
+                const cell1 = newRow.insertCell(0);
+                const cell2 = newRow.insertCell(1);
+                const cell3 = newRow.insertCell(2);
+                const cell4 = newRow.insertCell(3);
 
-                    cell1.textContent = data.amount;
-                    cell2.textContent = data.recipient;
-                    cell3.textContent = data.isDistributed;
+                cell1.textContent = data.amount;
+                cell2.textContent = data.recipient;
+                cell3.textContent = data.isDistributed;
 
-                    // ステータス変更用のセレクトボックスを作成
-                    const select = document.createElement('select');
-                    select.innerHTML = `
-                        <option value="未分配" ${data.isDistributed === '未分配' ? 'selected' : ''}>未分配</option>
-                        <option value="分配済み" ${data.isDistributed === '分配済み' ? 'selected' : ''}>分配済み</option>
-                    `;
-                    select.addEventListener('change', (event) => {
-                        db.collection("revenues").doc(doc.id).update({
-                            isDistributed: event.target.value
-                        }).then(() => {
-                            loadRevenues(); // ステータス変更後にデータを再表示
-                        });
-                    });
-                    cell4.appendChild(select);
-
-                    // 各受け取り人ごとの合計を計算
-                    if (data.recipient === '西野') {
-                        totalNishino += data.amount;
-                    } else if (data.recipient === 'かいと') {
-                        totalKaito += data.amount;
-                    }
-
-                    grandTotal += data.amount;
-
-                    // 時間ごとの合計を計算
-                    const timeDiff = now - data.timestamp.toDate();
-                    if (timeDiff < oneDay) {
-                        dailyTotal += data.amount;
-                    }
-                    if (timeDiff < 7 * oneDay) {
-                        weeklyTotal += data.amount;
-                    }
-                    if (timeDiff < 30 * oneDay) {
-                        monthlyTotal += data.amount;
-                    }
+                // ステータス変更用のセレクトボックスを作成
+                const select = document.createElement('select');
+                select.innerHTML = `
+                    <option value="未分配" ${data.isDistributed === '未分配' ? 'selected' : ''}>未分配</option>
+                    <option value="分配済み" ${data.isDistributed === '分配済み' ? 'selected' : ''}>分配済み</option>
+                `;
+                select.addEventListener('change', (event) => {
+                    revenues[index].isDistributed = event.target.value;
+                    localStorage.setItem('revenues', JSON.stringify(revenues));
+                    loadRevenues(); // ステータス変更後にデータを再表示
                 });
+                cell4.appendChild(select);
 
-                // 合計を表示
-                totalNishinoEl.textContent = totalNishino;
-                totalKaitoEl.textContent = totalKaito;
-                dailyTotalEl.textContent = dailyTotal;
-                weeklyTotalEl.textContent = weeklyTotal;
-                monthlyTotalEl.textContent = monthlyTotal;
-                grandTotalEl.textContent = grandTotal;
+                // 各受け取り人ごとの合計を計算
+                if (data.recipient === '西野') {
+                    totalNishino += data.amount;
+                } else if (data.recipient === 'かいと') {
+                    totalKaito += data.amount;
+                }
+
+                grandTotal += data.amount;
+
+                // 時間ごとの合計を計算
+                const timeDiff = now - new Date(data.timestamp);
+                if (timeDiff < oneDay) {
+                    dailyTotal += data.amount;
+                }
+                if (timeDiff < 7 * oneDay) {
+                    weeklyTotal += data.amount;
+                }
+                if (timeDiff < 30 * oneDay) {
+                    monthlyTotal += data.amount;
+                }
             });
+
+            // 合計を表示
+            totalNishinoEl.textContent = totalNishino;
+            totalKaitoEl.textContent = totalKaito;
+            dailyTotalEl.textContent = dailyTotal;
+            weeklyTotalEl.textContent = weeklyTotal;
+            monthlyTotalEl.textContent = monthlyTotal;
+            grandTotalEl.textContent = grandTotal;
         }
 
         // フォーム送信時のイベントハンドラ
@@ -195,8 +169,8 @@
             const recipient = document.getElementById('recipient').value;
             const isDistributed = document.getElementById('isDistributed').value;
 
-            // Firestoreに収益を保存
-            saveRevenueToFirestore(amount, recipient, isDistributed);
+            // ローカルストレージに収益を保存
+            saveRevenueToLocal(amount, recipient, isDistributed);
 
             form.reset(); // フォームをリセット
         });
